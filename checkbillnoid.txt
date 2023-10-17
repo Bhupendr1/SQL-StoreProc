@@ -1,0 +1,13 @@
+CREATE PROCEDURE [dbo].[CheckBillNoidProc]  
+@BillReferenceNo INT  
+AS  
+BEGIN  
+ IF(Exists(select 1 from VBillRegister where BillNoID=@BillReferenceNo))  
+  BEGIN  
+   Select BillNoID,TVNo,TVDate,OfficeId,TreasuryCode,DDOCode,DateName( month , DateAdd( month , PayMonth ,-1)) AS Month,PayYear from VBillRegister where BillNoID=@BillReferenceNo;  
+  END  
+ ELSE  
+  BEGIN  
+   SELECT '-1'  
+  end  
+END  

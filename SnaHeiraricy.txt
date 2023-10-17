@@ -1,0 +1,251 @@
+  
+  
+-- exec limitAllocationandExpenditureRpt @Snaid=38,@AgencyCode='0',@child_code='0',@SubChild_code='0'  
+-- exec limitAllocationandExpenditureRpt @Snaid=38,@AgencyCode='RJAJ00000011',@child_code='0',@SubChild_code='0'  
+-- exec limitAllocationandExpenditureRpt @Snaid=38,@AgencyCode='RJAJ00000011',@child_code='RJAJ00006519',@SubChild_code='0'  
+-- exec limitAllocationandExpenditureRpt @Snaid=38,@AgencyCode='RJAJ00000011',@child_code='RJAJ00006519',@SubChild_code='RJAJ00000459'  
+  
+CREATE Proc [dbo].[limitAllocationandExpenditureRpt]    
+@Snaid int,  
+@AgencyCode varchar(100),  
+@child_code varchar(100),  
+@SubChild_code varchar(100)  
+AS  
+BEGIN  
+ DECLARE   
+  @level INT,   
+  @limit_Type INT,   
+  @AgencyId INT,  
+  @child_id INT,  
+  @SubChild_id INT;  
+  
+ -- Get LimitType  
+ SET @limit_Type = ISNULL((SELECT ISNULL(LimitType, 0) FROM SNALimitType WHERE SNAID = @Snaid),0);  
+  
+ -- Get AgencyId for AgencyCode  
+ SET @AgencyId = ISNULL((SELECT top 1 ISNULL(x.AgencyId, 0) FROM AgencyCodeMap AS x WHERE x.AgencyCode = @AgencyCode AND x.SNAID = @Snaid),0);  
+  
+ -- Get AgencyId for child_code  
+ SET @child_id = ISNULL((SELECT top 1 ISNULL(x.AgencyId, 0) FROM AgencyCodeMap AS x WHERE x.AgencyCode = @child_code AND x.SNAID = @Snaid),0);  
+  
+ -- Get AgencyId for SubChild_code  
+ SET @SubChild_id = ISNULL((SELECT top 1 ISNULL(x.AgencyId, 0) FROM AgencyCodeMap AS x WHERE x.AgencyCode = @SubChild_code AND x.SNAID = @Snaid),0);  
+  
+ IF(@Agencyid=0  AND @child_id=0 AND @SubChild_id=0) BEGIN  SET @level=1 END   
+  
+ IF(@Agencyid<>0 AND @child_id=0 AND @SubChild_id=0) BEGIN  SET @level=2 END  
+  
+ IF(@Agencyid<>0 AND @child_id<>0 AND @SubChild_id=0)BEGIN  SET @level=3 END  
+  
+ IF(@Agencyid<>0 AND @child_id<>0 AND @SubChild_id<>0)BEGIN SET @level=4 END  
+    
+ IF EXISTS(SELECT 1 FROM SNAHIERARCHY WHERE SNAID=@Snaid and CHILD_ID=@AgencyId  
+         UNION all  
+     SELECT 1 FROM SNAHIERARCHY WHERE SNAID=@Snaid and CHILD_ID=@child_id  
+         UNION all  
+     SELECT 1 FROM SNAHIERARCHY  WHERE SNAID=@Snaid and CHILD_ID=@SubChild_id)  
+ begin  
+ IF @limit_type=1  
+     BEGIN  
+   
+   IF @level=1   
+     BEGIN  
+       SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select x.ComponentName from SchemeComponentMaster x where x.snaid=ACW.snaid       
+              and componentid in (select top 1 c.ComponentID from SubComponentMaster c where c.SubComponentID = ACW.SUBCOMPONENTID)) as componentName,    
+      ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023  AND ACW.COMPONENTID=0 ;  
+    END  
+   ELSE IF @level=2   
+    BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select x.ComponentName from SchemeComponentMaster x where x.snaid=ACW.snaid       
+              and componentid in (select top 1 c.ComponentID from SubComponentMaster c where c.SubComponentID = ACW.SUBCOMPONENTID)) as componentName,    
+     ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@AgencyId AND ACW.COMPONENTID=0;  
+    END  
+   ELSE IF @level=3  
+     BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select x.ComponentName from SchemeComponentMaster x where x.snaid=ACW.snaid       
+              and componentid in (select top 1 c.ComponentID from SubComponentMaster c where c.SubComponentID = ACW.SUBCOMPONENTID)) as componentName,    
+     ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@Child_id AND ACW.COMPONENTID=0;  
+    END  
+      ELSE IF @level=4  
+     BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select x.ComponentName from SchemeComponentMaster x where x.snaid=ACW.snaid       
+              and componentid in (select top 1 c.ComponentID from SubComponentMaster c where c.SubComponentID = ACW.SUBCOMPONENTID)) as componentName,  
+     ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@SubChild_id AND ACW.COMPONENTID=0;  
+    END  
+  END  
+ ELSE IF @limit_type = 2   
+     BEGIN  
+   SELECT 'limit_type=2'  
+   IF @level=1   
+     BEGIN  
+      SELECT   
+      (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWDL.AGENCYID) As AgencyName,  
+      (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWDL.SNAID) as SnaName,  
+       AWDL.TOTALLIMIT,AWDL.BLOCKAMOUNT,AWDL.EXPENDITUREAMOUNT,AWDL.VALIDTILL,  
+      (AWDL.TOTALLIMIT - (AWDL.BLOCKAMOUNT+AWDL.EXPENDITUREAMOUNT)) AS UnspentLimit  
+      from SnaAgencyWiseDirectLimit AS AWDL   
+      WHERE AWDL.SNAID=@Snaid AND FINYEAR=2023 AND AWDL.HLEVEL=@level;  
+    END  
+   ELSE IF @level=2   
+    BEGIN  
+     SELECT   
+      (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWDL.AGENCYID) As AgencyName,  
+      (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWDL.SNAID) as SnaName,  
+       AWDL.TOTALLIMIT,AWDL.BLOCKAMOUNT,AWDL.EXPENDITUREAMOUNT,AWDL.VALIDTILL,  
+      (AWDL.TOTALLIMIT - (AWDL.BLOCKAMOUNT+AWDL.EXPENDITUREAMOUNT)) AS UnspentLimit  
+      from SnaAgencyWiseDirectLimit AS AWDL   
+     WHERE AWDL.SNAID=@Snaid AND FINYEAR=2023 AND AWDL.HLevel=@level AND AWDL.AGENCYID=@AgencyId;  
+    END  
+   ELSE IF @level=3  
+     BEGIN  
+     SELECT   
+      (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWDL.AGENCYID) As AgencyName,  
+      (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWDL.SNAID) as SnaName,  
+       AWDL.TOTALLIMIT,AWDL.BLOCKAMOUNT,AWDL.EXPENDITUREAMOUNT,AWDL.VALIDTILL,  
+      (AWDL.TOTALLIMIT - (AWDL.BLOCKAMOUNT+AWDL.EXPENDITUREAMOUNT)) AS UnspentLimit  
+      from SnaAgencyWiseDirectLimit AS AWDL   
+     WHERE AWDL.SNAID=@Snaid AND FINYEAR=2023 AND AWDL.HLevel=@level AND AWDL.AGENCYID=@child_id;  
+    END  
+      ELSE IF @level=4  
+     BEGIN  
+     SELECT   
+      (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWDL.AGENCYID) As AgencyName,  
+      (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWDL.SNAID) as SnaName,  
+       AWDL.TOTALLIMIT,AWDL.BLOCKAMOUNT,AWDL.EXPENDITUREAMOUNT,AWDL.VALIDTILL,  
+      (AWDL.TOTALLIMIT - (AWDL.BLOCKAMOUNT+AWDL.EXPENDITUREAMOUNT)) AS UnspentLimit  
+      from SnaAgencyWiseDirectLimit AS AWDL   
+     WHERE AWDL.SNAID=@Snaid AND FINYEAR=2023 AND AWDL.HLevel=@level AND AWDL.AGENCYID=@SubChild_id;  
+    END  
+  END  
+ ELSE IF @limit_type = 3   
+     BEGIN  
+   SELECT 'limit_type=3'  
+   IF @level=1   
+     BEGIN  
+      SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWD.AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWD.SNAID) as SnaName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=AWD.SNAID AND c. ComponentID =AWD.COMPONENTID) as ComponentName,  
+      AWD.TOTALLIMIT,AWD.BLOCKAMOUNT,AWD.EXPENDITUREAMOUNT,AWD.VALIDTILL,  
+     (AWD.TOTALLIMIT - (AWD.BLOCKAMOUNT+AWD.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseDirectLimit AS AWD  
+     WHERE AWD.SNAID=@Snaid AND AWD.FINYEAR=2023   
+    END  
+   ELSE IF @level=2   
+    BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWD.AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWD.SNAID) as SnaName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=AWD.SNAID AND c. ComponentID =AWD.COMPONENTID) as ComponentName,  
+      AWD.TOTALLIMIT,AWD.BLOCKAMOUNT,AWD.EXPENDITUREAMOUNT,AWD.VALIDTILL,  
+     (AWD.TOTALLIMIT - (AWD.BLOCKAMOUNT+AWD.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseDirectLimit AS AWD  
+     WHERE AWD.SNAID=@Snaid AND FINYEAR=2023 AND AWD.HLevel=@level AND AWD.AGENCYID=@AgencyId;  
+    END  
+   ELSE IF @level=3  
+     BEGIN  
+    SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWD.AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWD.SNAID) as SnaName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=AWD.SNAID AND c. ComponentID =AWD.COMPONENTID) as ComponentName,  
+      AWD.TOTALLIMIT,AWD.BLOCKAMOUNT,AWD.EXPENDITUREAMOUNT,AWD.VALIDTILL,  
+     (AWD.TOTALLIMIT - (AWD.BLOCKAMOUNT+AWD.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseDirectLimit AS AWD  
+     WHERE AWD.SNAID=@Snaid AND FINYEAR=2023 AND AWD.HLevel=@level AND AWD.AGENCYID=@child_id;  
+    END  
+     ELSE IF @level=4  
+     BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = AWD.AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=AWD.SNAID) as SnaName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=AWD.SNAID AND c. ComponentID =AWD.COMPONENTID) as ComponentName,  
+      AWD.TOTALLIMIT,AWD.BLOCKAMOUNT,AWD.EXPENDITUREAMOUNT,AWD.VALIDTILL,  
+     (AWD.TOTALLIMIT - (AWD.BLOCKAMOUNT+AWD.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseDirectLimit AS AWD  
+     WHERE AWD.SNAID=@Snaid AND FINYEAR=2023 AND AWD.HLevel=@level AND AWD.AGENCYID=@SubChild_id;  
+    END  
+  END  
+   
+ ELSE IF @limit_type = 4   
+     BEGIN  
+   SELECT 'limit_type=4'  
+   IF @level=1   
+     BEGIN  
+       SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=ACW.SNAID AND c. ComponentID IN (SELECT TOP 1 ComponentID FROM SubComponentMaster WHERE SubComponentID=ACW.SUBCOMPONENTID )) as ComponentName,  
+       ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.SUBCOMPONENTID=0;   
+    END  
+   ELSE IF @level=2   
+    BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=ACW.SNAID AND c. ComponentID IN (SELECT TOP 1 ComponentID FROM SubComponentMaster WHERE SubComponentID=ACW.SUBCOMPONENTID )) as ComponentName,  
+       ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@AgencyId AND ACW.SUBCOMPONENTID=0;  
+    END  
+   ELSE IF @level=3  
+     BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=ACW.SNAID AND c. ComponentID IN (SELECT TOP 1 ComponentID FROM SubComponentMaster WHERE SubComponentID=ACW.SUBCOMPONENTID )) as ComponentName,  
+     ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@Child_id AND ACW.SUBCOMPONENTID=0;  
+    END  
+      ELSE IF @level=4  
+     BEGIN  
+     SELECT   
+     (SELECT AC.AgencyCode +'-'+ AC.AgencyName FROM AgencyCodeMap AS AC WHERE AC.AgencyId = ACW.Child_AGENCYID) As AgencyName,  
+     (SELECT StateSchemeCode + '-' + SNAName FROM SNARegistration WHERE SNAID=ACW.SNAID) as SnaName,  
+     (select SubComponentName from SubComponentMaster WHERE SubComponentID = ACW.SUBCOMPONENTID) as SubcomponentName,  
+     (select ComponentName from schemecomponentmaster c WHERE c.SNAID=ACW.SNAID AND c. ComponentID IN (SELECT TOP 1 ComponentID FROM SubComponentMaster WHERE SubComponentID=ACW.SUBCOMPONENTID )) as ComponentName,  
+     ACW.TOTALLIMIT,ACW.BLOCKAMOUNT,ACW.EXPENDITUREAMOUNT,ACW.BUDGETHEAD,ACW.BFCTYPE,ACW.OBJECTHEAD,ACW.VALIDTILL,  
+     (ACW.TOTALLIMIT - (ACW.BLOCKAMOUNT+ACW.EXPENDITUREAMOUNT)) AS UnspentLimit  
+     from SnaAgencyComponentWiseLimit AS ACW   
+     WHERE ACW.SNAID=@Snaid AND FINYEAR=2023 AND ACW.HLevel=@level AND ACW.Child_AGENCYID=@SubChild_id AND ACW.SUBCOMPONENTID=0;  
+    END  
+  end  
+  END       
+END  
+  10:17 17-10-2023

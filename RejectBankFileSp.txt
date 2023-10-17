@@ -1,0 +1,53 @@
+USE [paymanager]
+GO
+/****** Object:  StoredProcedure [dbo].[rejectBankFile]    Script Date: 17-10-2023 09:44:56 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[rejectBankFile]  
+@TYPE TINYINT,  
+@Userid INT,  
+@FILENAME VARCHAR(50) = NULL,  
+@Reason VARCHAR(50) = NULL,  
+@DateOfSubmission DATETIME = NULL  
+AS  
+BEGIN  
+    SET NOCOUNT ON;  
+	  BEGIN TRY
+        IF (@TYPE = 1)  
+        BEGIN  
+            SELECT B.RefNo AS FileNames  
+            FROM BanksoftCopyFlags AS B  
+            WHERE B.UserId = @Userid AND B.FeedbackFlag = 'N';  
+        END 
+  
+        IF (@TYPE = 2)  
+        BEGIN  
+            IF (@Reason > 50)
+            BEGIN
+                SELECT '-1';
+            END
+            ELSE
+            BEGIN
+                BEGIN TRANSACTION;
+                UPDATE B  
+                SET B.FeedbackFlag = 'R'  
+                FROM BanksoftCopyFlags AS B  
+                WHERE B.RefNo = @FILENAME AND B.UserId = @Userid AND B.FeedbackFlag = 'N'; 
+              
+			    INSERT INTO RejectBankFileTB (userid, filenames, reason, dateofSubmission) 
+                VALUES (@Userid, @FILENAME, @Reason, @DateOfSubmission);  
+                COMMIT;
+                SELECT '1';
+            END
+        END
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK;
+        SELECT '-1';
+    END CATCH;
+ SET NOCOUNT OFF;  
+END  
+

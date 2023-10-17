@@ -1,0 +1,46 @@
+USE [paymanager]
+GO
+/****** Object:  StoredProcedure [dbo].[CheckBillSign]    Script Date: 17-10-2023 09:48:34 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ 
+-- =============================================
+-- Author:	Ankit Suthar
+-- Create date: <Create Date,,>
+-- Description:	<Description,,>
+-- =============================================
+ALTER PROCEDURE [dbo].[CheckBillSign]
+	@type tinyint,
+	@BillNoId int
+AS
+BEGIN
+	SET NOCOUNT ON;
+	if(@type = 1) --PayManager
+	     Begin
+		        Select 
+				isnull((select count(x.Id) From paymanager.dbo.TreasuryFileSignLog as x where x.BillNoId = @BillNoId and SingDocument is not null and DeleteSignDocument is null),0) as ddoSign,
+				isnull((select count(x.ID) From paymanager.dbo.EAccountBillSign as x where x.BillNoId = @BillNoId),0) as TreasurySign
+		 end
+	if(@type = 2)--PriPayManager
+	     Begin
+		       -- Select 
+				--isnull((select count(x.Id) From PanchaytiRaj.dbo.TreasuryFileSignLog as x where x.BillNoId = @BillNoId and SingDocument is not null and DeleteSignDocument is null),0) as ddoSign,
+				--isnull((select count(x.ID) From PanchaytiRaj.dbo.EAccountBillSign as x where x.BillNoId = @BillNoId
+				--union
+				--select count(x.ID) From paymanager.dbo.EAccountBillSign as x where x.BillNoId = @BillNoId
+				--,0) as TreasurySign
+				SELECT 0 AS ddoSign,1 AS TreasurySign
+
+		 end
+	if(@type = 3)--SNA
+	     Begin
+		        --Select 
+				--isnull((select count(x.Id) From sna.dbo.DDOFileSignLog as x where x.BillNoId = @BillNoId and SingDocument is not null and DeleteSignDocument is null),0) as ddoSign,
+				--isnull((select count(x.ID) From paymanager.dbo.EAccountBillSign as x where x.BillNoId = @BillNoId
+				--),0) as TreasurySign
+				SELECT 0 AS ddoSign,1 AS TreasurySign
+		 end
+	SET NOCOUNT OFF;
+END
